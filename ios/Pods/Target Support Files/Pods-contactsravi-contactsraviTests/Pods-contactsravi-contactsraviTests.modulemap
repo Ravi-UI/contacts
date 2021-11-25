@@ -1,0 +1,6 @@
+module Pods_contactsravi_contactsraviTests {
+  umbrella header "Pods-contactsravi-contactsraviTests-umbrella.h"
+
+  export *
+  module * { export * }
+}
