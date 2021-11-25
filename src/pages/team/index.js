@@ -1,15 +1,18 @@
 import React from 'react'
-import { View, Text, Dimensions, StyleSheet, TouchableOpacity, Modal, SafeAreaView, FlatList, Alert } from 'react-native'
+import { View, Text, Dimensions, StyleSheet, TouchableOpacity, Modal, SafeAreaView, FlatList, Alert, PermissionsAndroid, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Contacts from 'react-native-contacts';
+// Components
 import Button from '../../components/button';
-import { Colors, Size } from '../../app-config';
-import Loader from '../../components/loader';
+// Utils
+import { Colors } from '../../app-config';
+import Contact from './contactItem';
+// Icons
 import GroupIcon from '../../assets/icons/groups_icon.svg';
 import InfoIcon from '../../assets/icons/info_icon.svg';
 import BackIcon from '../../assets/icons/arrow-left-line.svg';
-import Contact from './contactItem';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Contacts from 'react-native-contacts';
-const { width, height } = Dimensions.get('window');
+// Global 
+const { height } = Dimensions.get('window');
 
 const initialContacts = [
 	{ name: "Test1", phone: "9999999999" },
@@ -35,6 +38,7 @@ const initialContacts = [
 ];
 
 class TeamScreen extends React.Component {
+
 	constructor(props) {
 		super(props);
 		this.state = {
@@ -47,24 +51,47 @@ class TeamScreen extends React.Component {
 			isModalVisible: false,
 		}
 	}
+
 	componentDidMount() {
 		AsyncStorage.setItem("contacts", JSON.stringify(initialContacts));
+		// <--- load initial team member list
 		this.handleLoadContacts();
+		if (Platform.OS === 'android') {
+			// <--- Asking permission for android to access contact
+			PermissionsAndroid.request(
+				PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+				{
+					'title': 'Contacts',
+					'message': 'This app would like to view your contacts.',
+					'buttonPositive': 'Please accept bare mortal'
+				}
+			).then(() => {
+				// <--- load device contact
+				this.loadDeviceContacts();
+			})
+		} else {
+			// <--- load device contact
+			this.loadDeviceContacts();
+		}
+	}
+
+	// <--- loading team member list for both iitial and pagination
+	loadDeviceContacts = () => {
 		Contacts.getAll().then(results => {
 			this.setState({
-				deviceContacts: results.map(el => ({ name: `${el.familyName} ${el.givenName}`, recordID: el.recordID, phone: el.phoneNumbers[0].number }))
-			}, () => {
-				console.log(this.state.deviceContacts)
+				deviceContacts: results.map(el => ({ name: `${el.familyName} ${el.givenName}`, recordID: el.recordID, phone: el.phoneNumbers.length > 0 ? el.phoneNumbers[0].number : "" }))
 			})
-			console.log(results)
-			// contacts returned
 		})
 	}
+
+	// <--- show / hide device contact list modal
 	toggleModal = () => {
 		this.setState((prevState) => {
 			return { isModalVisible: !prevState.isModalVisible }
 		})
 	}
+
+	// <--- loading team member list for both iitial and pagination
 	handleLoadContacts = () => {
 		const { size, page, contacts } = this.state;
 		AsyncStorage.getItem('contacts').then(res => {
@@ -79,41 +106,48 @@ class TeamScreen extends React.Component {
 			}
 		})
 	}
+
+	// <--- on end reached below method will trigger
 	onEndReached = () => {
 		if (!this.onEndReachedCalledDuringMomentum) {
 			this.handleLoadContacts();
 			this.onEndReachedCalledDuringMomentum = true;
 		}
 	}
+
+	// <--- render item for the teammember list
 	renderItem = ({ item }) => {
-		return <Contact item={item} height={height} />
+		return <Contact item={item} height={height} hasDelete />
 	}
+
+	// <--- render item for the device contact list
 	renderItemContact = ({ item }) => {
 		return <Contact item={item} height={height - 200} handleItemPress={this.handleItemPress} />
 	}
-	handleItemPress = (item) =>{
-		const { allContacts, contacts } = this.state;
+
+	// <--- add contact to the team list
+	handleItemPress = (item) => {
+		const { allContacts } = this.state;
 		const itemInList = allContacts.filter(el => el.name === item.name);
-		if(itemInList.length > 0){
+		if (itemInList.length > 0) {
 			Alert.alert("Team", "Contact Already availble in Team.")
-		}else{
+		} else {
 			const temp = [...allContacts, ...[item]];
 			AsyncStorage.setItem('contacts', JSON.stringify(temp));
 			this.setState((prevState) => {
-				return {contacts: [...prevState.contacts, ...[item]], allContacts: [...prevState.allContacts, ...[item]]}
+				return { contacts: [...prevState.contacts, ...[item]], allContacts: [...prevState.allContacts, ...[item]] }
 			})
 			this.toggleModal();
 		}
 	}
- 	render() {
-		const { isLoading, contacts, isModalVisible, deviceContacts } = this.state;
+
+	render() {
+		const { contacts, isModalVisible, deviceContacts } = this.state;
 		return (
 			<SafeAreaView>
-			<View contentContainerStyle={{ flexGrow: 1, backgroundColor: Colors.baseTheme }} keyboardShouldPersistTaps={"always"}>
-				{isLoading ? <Loader /> : null}
-				<View style={styles.container} >
-					<View>
-						<View style={{ flexDirection: "row", paddingHorizontal: 20 }}>
+				<>
+					<View style={styles.container} >
+						<View style={styles.headingWrap}>
 							<GroupIcon />
 							<Text style={styles.headingText}>Team Members</Text>
 							<InfoIcon />
@@ -130,34 +164,34 @@ class TeamScreen extends React.Component {
 							keyExtractor={item => `${item.phone}_${item.name}`}
 							initialNumToRender={5}
 							maxToRenderPerBatch={5}
-							removeClippedSubviews={true}
-							enableEmptySections={true}
+							removeClippedSubviews
+							enableEmptySections
 							onEndReached={this.onEndReached}
 							onEndReachedThreshold={0.001}
 							onMomentumScrollBegin={() => { this.onEndReachedCalledDuringMomentum = false; }}
 							style={{ height: height - 210 }}
 						/>
 						<Button
-							label={"Add Members"}
-							type={"secondary"}
+							label="Add Members"
+							type="secondary"
 							style={{ width: 200, marginTop: 20 }}
 							onPress={this.toggleModal} />
 					</View>
-				</View>
-				<Modal
-					animationType="slide"
-					visible={isModalVisible}
-					onRequestClose={() => {
-						this.toggleModal()
-					}}
-				>
-					<View style={{ flexDirection: "row", padding: 15, marginTop: 30}}>
-						<TouchableOpacity onPress={this.toggleModal} >
-						<BackIcon />
-						</TouchableOpacity>
-						<Text style={styles.headingText}>Add Contacts</Text>
-					</View>
-					<FlatList
+					{/* Device contact list modal */}
+					<Modal
+						animationType="slide"
+						visible={isModalVisible}
+						onRequestClose={() => {
+							this.toggleModal()
+						}}
+					>
+						<View style={ }>
+							<TouchableOpacity onPress={this.toggleModal} >
+								<BackIcon />
+							</TouchableOpacity>
+							<Text style={styles.headingText}>Add Contacts</Text>
+						</View>
+						<FlatList
 							data={deviceContacts}
 							getItemLayout={(data, index) => ({
 								length: height / 8,
@@ -166,22 +200,21 @@ class TeamScreen extends React.Component {
 							})}
 							renderItem={this.renderItemContact}
 							keyExtractor={item => `${item.phone}_${item.name}`}
-							initialNumToRender={5}
-							maxToRenderPerBatch={5}
-							removeClippedSubviews={true}
-							enableEmptySections={true}
-							// onEndReached={this.onEndReached}
+							initialNumToRender={10}
+							maxToRenderPerBatch={25}
+							removeClippedSubviews
+							enableEmptySections
 							onEndReachedThreshold={0.001}
-							// onMomentumScrollBegin={() => { this.onEndReachedCalledDuringMomentum = false; }}
 							style={{ height: height - 210 }}
 						/>
-				</Modal>
-			</View>
+					</Modal>
+				</>
 			</SafeAreaView>
 		)
 	}
 }
 
+// StyleSheet
 const styles = StyleSheet.create({
 	container: {
 		backgroundColor: Colors.baseTheme,
@@ -189,47 +222,22 @@ const styles = StyleSheet.create({
 		height: '100%',
 		paddingTop: 20
 	},
+	headingWrap: {
+		flexDirection: "row",
+		paddingHorizontal: 20
+	},
+	headingWrapSecodary: {
+		flexDirection: "row",
+		padding: 15,
+		marginTop: 30
+	},
 	headingText: {
 		color: Colors.primaryColor,
 		fontSize: 24,
 		marginBottom: 12,
 		marginHorizontal: 12,
 		flex: 1
-	},
-	paragraphText: {
-		fontSize: 12,
-		color: Colors.whiteColor,
-		letterSpacing: 0.6
-	},
-	flexRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	marginBottom40: {
-		marginBottom: 41
-	},
-	linkStyle: {
-		fontSize: Size.size14,
-		color: Colors.primaryColor,
-		textTransform: 'uppercase',
-		letterSpacing: 0.7
-	},
-	itemRow: {
-		backgroundColor: "#fff",
-		shadowColor: "#000",
-		shadowOffset: {
-			width: 0,
-			height: 5,
-		},
-		shadowOpacity: 0.34,
-		shadowRadius: 6.27,
-
-		elevation: 10,
-		marginBottom: 20,
-		marginHorizontal: 15,
-		borderRadius: 8,
-		padding: 15
 	}
 })
+
 export default TeamScreen;
