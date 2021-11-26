@@ -1,7 +1,7 @@
 import React from 'react'
-import { View, Text, Dimensions, StyleSheet, TouchableOpacity, Modal, SafeAreaView, FlatList, Alert, PermissionsAndroid, Platform } from 'react-native';
+import { View, Text, Dimensions, StyleSheet, SafeAreaView, FlatList, Alert, PermissionsAndroid, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Contacts from 'react-native-contacts';
+import { selectContactPhone } from 'react-native-select-contact';
 // Components
 import Button from '../../components/button';
 // Utils
@@ -9,8 +9,7 @@ import { Colors } from '../../app-config';
 import Contact from './contactItem';
 // Icons
 import GroupIcon from '../../assets/icons/groups_icon.svg';
-import InfoIcon from '../../assets/icons/info_icon.svg';
-import BackIcon from '../../assets/icons/arrow-left-line.svg';
+import InfoIcon from '../../assets/icons/info_icon.svg';;
 // Global 
 const { height } = Dimensions.get('window');
 
@@ -45,10 +44,7 @@ class TeamScreen extends React.Component {
 			contacts: [],
 			allContacts: [],
 			size: 5,
-			page: 0,
-			isLoading: false,
-			deviceContacts: [],
-			isModalVisible: false,
+			page: 0
 		}
 	}
 
@@ -65,23 +61,8 @@ class TeamScreen extends React.Component {
 					'message': 'This app would like to view your contacts.',
 					'buttonPositive': 'Please accept bare mortal'
 				}
-			).then(() => {
-				// <--- load device contact
-				this.loadDeviceContacts();
-			})
-		} else {
-			// <--- load device contact
-			this.loadDeviceContacts();
+			)
 		}
-	}
-
-	// <--- loading team member list for both iitial and pagination
-	loadDeviceContacts = () => {
-		Contacts.getAll().then(results => {
-			this.setState({
-				deviceContacts: results.map(el => ({ name: `${el.familyName} ${el.givenName}`, recordID: el.recordID, phone: el.phoneNumbers.length > 0 ? el.phoneNumbers[0].number : "" }))
-			})
-		})
 	}
 
 	// <--- show / hide device contact list modal
@@ -116,13 +97,8 @@ class TeamScreen extends React.Component {
 	}
 
 	// <--- render item for the teammember list
-	renderItem = ({ item }) => {
-		return <Contact item={item} height={height} hasDelete />
-	}
-
-	// <--- render item for the device contact list
-	renderItemContact = ({ item }) => {
-		return <Contact item={item} height={height - 200} handleItemPress={this.handleItemPress} />
+	renderItem = ({ item, index }) => {
+		return <Contact index={index} item={item} height={height} hasDelete />
 	}
 
 	// <--- add contact to the team list
@@ -141,8 +117,20 @@ class TeamScreen extends React.Component {
 		}
 	}
 
+	// <--- Show add contact screen
+	handleLoadDeviceContacts = () => {
+		return selectContactPhone()
+			.then(selection => {
+				if (!selection) {
+					return null;
+				}
+				const { contact, selectedPhone } = selection;
+				this.handleItemPress({ name: contact.name, phone: selectedPhone.number, id: contact.recordId })
+				return selectedPhone.number;
+			});
+	}
 	render() {
-		const { contacts, isModalVisible, deviceContacts } = this.state;
+		const { contacts } = this.state;
 		return (
 			<SafeAreaView>
 				<>
@@ -175,39 +163,8 @@ class TeamScreen extends React.Component {
 							label="Add Members"
 							type="secondary"
 							style={{ width: 200, marginTop: 20 }}
-							onPress={this.toggleModal} />
+							onPress={this.handleLoadDeviceContacts} />
 					</View>
-					{/* Device contact list modal */}
-					<Modal
-						animationType="slide"
-						visible={isModalVisible}
-						onRequestClose={() => {
-							this.toggleModal()
-						}}
-					>
-						<View style={ }>
-							<TouchableOpacity onPress={this.toggleModal} >
-								<BackIcon />
-							</TouchableOpacity>
-							<Text style={styles.headingText}>Add Contacts</Text>
-						</View>
-						<FlatList
-							data={deviceContacts}
-							getItemLayout={(data, index) => ({
-								length: height / 8,
-								offset: height / 8 * index,
-								index
-							})}
-							renderItem={this.renderItemContact}
-							keyExtractor={item => `${item.phone}_${item.name}`}
-							initialNumToRender={10}
-							maxToRenderPerBatch={25}
-							removeClippedSubviews
-							enableEmptySections
-							onEndReachedThreshold={0.001}
-							style={{ height: height - 210 }}
-						/>
-					</Modal>
 				</>
 			</SafeAreaView>
 		)
@@ -228,7 +185,7 @@ const styles = StyleSheet.create({
 	},
 	headingWrapSecodary: {
 		flexDirection: "row",
-		padding: 15,
+		// padding: 15,
 		marginTop: 30
 	},
 	headingText: {
